@@ -79,7 +79,9 @@ def get_metric_display_mean(metric: str, trial_df: pd.DataFrame) -> float:
     if metric == "radcliqv1":
         radcliq_mean = trial_df[metric].mean()
         if radcliq_mean <= 0:
-            raise ValueError("Mean RadCliqv1 must be positive to display 1 / mean(RadCliqv1)")
+            raise ValueError(
+                "Mean RadCliqv1 must be positive to display 1 / mean(RadCliqv1)"
+            )
         return 1 / radcliq_mean
     return trial_df[metric].mean()
 
@@ -116,7 +118,9 @@ def check_duplicate_runs(result_dir):
                     for df, v in zip(group_dfs[1:], vs[1:]):
                         print(f"--- cmp: {v}")
                         assert (ref["study_id"] == df["study_id"]).all()
-                        assert np.isclose(ref[cols], df[cols], rtol=1e-5, atol=1e-6).all()
+                        assert np.isclose(
+                            ref[cols], df[cols], rtol=1e-5, atol=1e-6
+                        ).all()
                     compared_groups += 1
                 except FileNotFoundError as e:
                     print(f"  WARNING: {e}, skipping")
@@ -128,7 +132,10 @@ def check_duplicate_runs(result_dir):
             f"({compared_groups} compared, {skipped_groups} skipped due to missing files)! ====="
         )
     else:
-        print(f"===== All duplicate runs are equivalent ({compared_groups} compared)! =====")
+        print(
+            f"===== All duplicate runs are equivalent ({compared_groups} compared)! ====="
+        )
+
 
 def check_metric_nan_rows(result_dir):
     print("===== Checking metric columns for missing values =====\n")
@@ -154,6 +161,7 @@ def check_metric_nan_rows(result_dir):
         print(f"===== Found missing metric values in {flagged_files} file(s) =====")
     else:
         print("===== No missing metric values found =====")
+
 
 def get_experiment_results(
     *,  # enforce kwargs
@@ -186,6 +194,7 @@ def get_experiment_results(
     trial_dfs = [df.set_index("study_id").loc[ids].reset_index() for df in trial_dfs]
     return trial_dfs
 
+
 def get_radcliq_bootstrap_intervals(
     *,
     exp_trials: list[tuple[str, str]],
@@ -202,7 +211,9 @@ def get_radcliq_bootstrap_intervals(
 
         mean_val = values.mean()
         if mean_val <= 0:
-            raise ValueError("Mean RadCliqv1 must be positive to display 1 / mean(RadCliqv1)")
+            raise ValueError(
+                "Mean RadCliqv1 must be positive to display 1 / mean(RadCliqv1)"
+            )
 
         rng = np.random.default_rng(random_state)
         boot_stats = np.empty(n_boot, dtype=float)
@@ -222,6 +233,7 @@ def get_radcliq_bootstrap_intervals(
         intervals[trial_name] = (1 / mean_val, ci_low, ci_high)
     return intervals
 
+
 def plot_experiment_bar(
     *,  # enforce kwargs
     title: str,
@@ -230,11 +242,7 @@ def plot_experiment_bar(
     trial_dfs: list[pd.DataFrame],
     metrics: list[str],
 ) -> plt.Figure:
-    lexical_metrics = [
-        "bleu4", 
-        "rougeL", 
-        "bertscore"
-    ]
+    lexical_metrics = ["bleu4", "rougeL", "bertscore"]
     semantic_metrics = [
         "f1radgraph",
         "f1chexbert",
@@ -243,10 +251,10 @@ def plot_experiment_bar(
         "radcliqv1",
     ]
     clear_metrics = [
-        "clear_label_presence", 
-        "clear_severity", 
-        "clear_descriptive_location", 
-        "clear_recommendation"
+        "clear_label_presence",
+        "clear_severity",
+        "clear_descriptive_location",
+        "clear_recommendation",
     ]
     metric_groups = [
         ([m for m in metrics if m in lexical_metrics], "Lexical"),
@@ -264,27 +272,34 @@ def plot_experiment_bar(
     # setup dataframe for seaborn barplot
     melted_results = []
     for trial_df, (trial_name, _) in zip(trial_dfs, exp_trials):
-        trial_df = trial_df[["study_id"] + metrics].melt(id_vars="study_id", var_name="metric")
+        trial_df = trial_df[["study_id"] + metrics].melt(
+            id_vars="study_id", var_name="metric"
+        )
         trial_df[exp_name] = trial_name
         melted_results.append(trial_df)
     df = pd.concat(melted_results, ignore_index=True)
-    
-    
+
     # NOTE: Keep raw RadCliqv1 values for paired t-tests to operate on the
     # original per-study scores. The plotted summary uses 1 / mean(RadCliqv1)
     # in plot_experiment_bar for display only.
     df_display = df.copy()
-    for trial_name, trial_df in zip(hue_order := [trial_name for trial_name, _ in exp_trials], trial_dfs):
+    for trial_name, trial_df in zip(
+        hue_order := [trial_name for trial_name, _ in exp_trials], trial_dfs
+    ):
         if "radcliqv1" in metrics and "radcliqv1" in trial_df.columns:
-            mask = (df_display["metric"] == "radcliqv1") & (df_display[exp_name] == trial_name)
-            df_display.loc[mask, "value"] = get_metric_display_mean("radcliqv1", trial_df)
+            mask = (df_display["metric"] == "radcliqv1") & (
+                df_display[exp_name] == trial_name
+            )
+            df_display.loc[mask, "value"] = get_metric_display_mean(
+                "radcliqv1", trial_df
+            )
 
     # setup seaborn barplot parameters
     x = "metric"
     y = "value"
     hue = exp_name
     palette = [MODEL2COLOR[trial_file] for _, trial_file in exp_trials]
-    
+
     max_cols = max(len(g) for g, _ in metric_groups)
     fig, axes = plt.subplots(
         len(metric_groups),
@@ -292,7 +307,7 @@ def plot_experiment_bar(
         figsize=(max(8, 2.2 * max_cols), 3 * len(metric_groups)),
     )
     axes = np.atleast_1d(axes)
-    
+
     # Compute RadCliqv1 CI using bootstrap
     radcliq_bootstrap_ci = None
     if "radcliqv1" in metrics:
@@ -437,7 +452,10 @@ def plot_experiment_radar(
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
 
     for trial_df, (trial_name, trial_file) in zip(trial_dfs, exp_trials):
-        values = [to_radial(metric, get_metric_display_mean(metric, trial_df)) for metric in metrics]
+        values = [
+            to_radial(metric, get_metric_display_mean(metric, trial_df))
+            for metric in metrics
+        ]
         values += values[:1]
         color = MODEL2COLOR[trial_file]
         ax.plot(angles, values, linewidth=2, label=trial_name, color=color)
@@ -456,7 +474,9 @@ def plot_experiment_radar(
         angle = angles[i]
         for j in range(n_ticks):
             r = j / (n_ticks - 1)
-            actual_val = metric_min[metric] + r * (metric_max[metric] - metric_min[metric])
+            actual_val = metric_min[metric] + r * (
+                metric_max[metric] - metric_min[metric]
+            )
             ax.text(
                 angle,
                 r,
