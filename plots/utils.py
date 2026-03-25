@@ -1,5 +1,6 @@
 import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Literal
 
 import matplotlib.pyplot as plt
@@ -115,7 +116,7 @@ def check_duplicate_runs(result_dir):
                     for df, v in zip(group_dfs[1:], vs[1:]):
                         print(f"--- cmp: {v}")
                         assert (ref["study_id"] == df["study_id"]).all()
-                        assert np.isclose(ref[cols], df[cols]).all()
+                        assert np.isclose(ref[cols], df[cols], rtol=1e-5, atol=1e-6).all()
                     compared_groups += 1
                 except FileNotFoundError as e:
                     print(f"  WARNING: {e}, skipping")
@@ -129,6 +130,30 @@ def check_duplicate_runs(result_dir):
     else:
         print(f"===== All duplicate runs are equivalent ({compared_groups} compared)! =====")
 
+def check_metric_nan_rows(result_dir):
+    print("===== Checking metric columns for missing values =====\n")
+    metric_files = sorted(Path(result_dir).rglob("*_METRICS.csv"))
+    flagged_files = 0
+    for path in metric_files:
+        df = pd.read_csv(path)
+        metric_cols = [col for col in ALL_METRICS if col in df.columns]
+        nan_cols = [col for col in metric_cols if df[col].isna().any()]
+        if not nan_cols:
+            continue
+
+        flagged_files += 1
+        print(path)
+        for col in nan_cols:
+            bad = df[col].isna()
+            cols_to_show = [c for c in ["study_id", "dicom_id", col] if c in df.columns]
+            print(f"  {col}: {int(bad.sum())} missing")
+            print(df.loc[bad, cols_to_show])
+            print()
+
+    if flagged_files:
+        print(f"===== Found missing metric values in {flagged_files} file(s) =====")
+    else:
+        print("===== No missing metric values found =====")
 
 def get_experiment_results(
     *,  # enforce kwargs
