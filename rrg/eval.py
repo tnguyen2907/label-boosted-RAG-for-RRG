@@ -1,27 +1,28 @@
 import argparse
+import contextlib
+import gc
 import os
 import subprocess
+import time
 from typing import Literal, get_args
-from _data import DEFAULT_STUDY_ID_COL
-
-import pandas as pd
-import transformers
-import torch
 
 import evaluate
-from sklearn.metrics import f1_score
-from f1chexbert import F1CheXbert
-from radgraph import F1RadGraph
-from green_score import compute_green
-from RaTEScore import RaTEScore
-from CXRMetric import compute_radcliq
+import pandas as pd
+import torch
+import transformers
+from _data import DEFAULT_STUDY_ID_COL
 from clear_evaluator import compute_clear
+from CXRMetric import compute_radcliq
+from f1chexbert import F1CheXbert
+from green_score import compute_green
 
-from tqdm import tqdm
-import gc, contextlib
-import time
 # Disable PyRuSH debug messages for RaTEScore
 from loguru import logger
+from radgraph import F1RadGraph
+from RaTEScore import RaTEScore
+from sklearn.metrics import f1_score
+from tqdm import tqdm
+
 logger.disable("PyRuSH")
 
 METRIC = Literal[
@@ -33,7 +34,7 @@ METRIC = Literal[
     "green",
     "ratescore",
     "radcliqv1",
-    "clear"
+    "clear",
 ]
 DEFAULT_METRICS = list(get_args(METRIC))
 DEFAULT_REF_COL = "actual_text"
@@ -58,7 +59,9 @@ def gpu_status(label: str):
         for i in range(torch.cuda.device_count()):
             alloc = torch.cuda.memory_allocated(i) / 1024**3
             reserved = torch.cuda.memory_reserved(i) / 1024**3
-            print(f"  [torch] GPU {i}: allocated={alloc:.2f} GB, reserved={reserved:.2f} GB")
+            print(
+                f"  [torch] GPU {i}: allocated={alloc:.2f} GB, reserved={reserved:.2f} GB"
+            )
     print(f"{'='*60}\n")
 
 
@@ -68,6 +71,7 @@ def free_gpu():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
 
 def evaluate_generations(
     report_csv: str,
@@ -152,13 +156,15 @@ def evaluate_generations(
             del f1chexbert
 
         elif metric == "green":
-            green_results, green_analysis = compute_green(refs, hyps)                                                                                                                                                            
-            results = pd.Series(green_results)                                                                                                                           
-            all_results.append(green_analysis.rename("green_analysis"))   
+            green_results, green_analysis = compute_green(refs, hyps)
+            results = pd.Series(green_results)
+            all_results.append(green_analysis.rename("green_analysis"))
 
         elif metric == "ratescore":
             ratescore = RaTEScore(batch_size=8)
-            ratescore_results = ratescore.compute_score(candidate_list=hyps, reference_list=refs)
+            ratescore_results = ratescore.compute_score(
+                candidate_list=hyps, reference_list=refs
+            )
             results = pd.Series(ratescore_results)
 
             del ratescore
@@ -170,17 +176,35 @@ def evaluate_generations(
         elif metric == "clear":
             clear_results = compute_clear(refs, hyps)
 
-            all_results.append(pd.Series(clear_results["gen_labels"],    name="generated_clear_labels"))
-            all_results.append(pd.Series(clear_results["gt_labels"],     name="actual_clear_labels"))
-            all_results.append(pd.Series(clear_results["gen_features"],  name="generated_clear_features"))
-            all_results.append(pd.Series(clear_results["gt_features"],   name="actual_clear_features"))
+            all_results.append(
+                pd.Series(clear_results["gen_labels"], name="generated_clear_labels")
+            )
+            all_results.append(
+                pd.Series(clear_results["gt_labels"], name="actual_clear_labels")
+            )
+            all_results.append(
+                pd.Series(
+                    clear_results["gen_features"], name="generated_clear_features"
+                )
+            )
+            all_results.append(
+                pd.Series(clear_results["gt_features"], name="actual_clear_features")
+            )
 
-            all_results.append(pd.Series(clear_results["label_presence"],   name="clear_label_presence"))
+            all_results.append(
+                pd.Series(clear_results["label_presence"], name="clear_label_presence")
+            )
             # all_results.append(pd.Series(clear_results["first_occurence"],  name="clear_first_occurrence"))   # not use First occurrence since we are not using prior studies
             # all_results.append(pd.Series(clear_results["change"],           name="clear_change"))             # not use Change since we are not using prior studies
-            all_results.append(pd.Series(clear_results["severity"],         name="clear_severity"))
-            all_results.append(pd.Series(clear_results["location"],         name="clear_descriptive_location"))
-            all_results.append(pd.Series(clear_results["recommendation"],   name="clear_recommendation"))
+            all_results.append(
+                pd.Series(clear_results["severity"], name="clear_severity")
+            )
+            all_results.append(
+                pd.Series(clear_results["location"], name="clear_descriptive_location")
+            )
+            all_results.append(
+                pd.Series(clear_results["recommendation"], name="clear_recommendation")
+            )
 
             timings[metric] = (time.time() - start_time) / 60
             continue
@@ -189,10 +213,10 @@ def evaluate_generations(
 
         results.name = metric
         all_results.append(results)
-        
+
         timings[metric] = (time.time() - start_time) / 60
         # gpu_status(f"AFTER {metric}")
-        
+
         free_gpu()
 
     print("\n--- Metric Runtimes ---")
